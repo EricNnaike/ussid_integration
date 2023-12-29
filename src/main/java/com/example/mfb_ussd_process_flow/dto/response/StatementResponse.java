@@ -1,14 +1,11 @@
 package com.example.mfb_ussd_process_flow.dto.response;
 
-import com.example.mfb_ussd_process_flow.utils.CustomDateDeserializer;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
 
 @Data
@@ -77,11 +74,9 @@ public class StatementResponse {
         private String BranchAddress;
 
         @JsonProperty("StartDate")
-//        @JsonDeserialize(using = CustomDateDeserializer.class)
         private String StartDate;
 
         @JsonProperty("EndDate")
-//        @JsonDeserialize(using = CustomDateDeserializer.class)
         private String EndDate;
     }
 

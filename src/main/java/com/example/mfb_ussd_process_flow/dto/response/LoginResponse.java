@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+
 import java.util.Date;
 
 
@@ -15,6 +16,7 @@ public class LoginResponse extends BaseResponse{
     private Long id;
 
     private String username;
+    private String email;
 
     private String secretKey;
 

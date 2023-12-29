@@ -21,6 +21,7 @@ import com.example.mfb_ussd_process_flow.service.emailService.EmailService;
 import jakarta.mail.MessagingException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -28,12 +29,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import javax.print.DocFlavor;
 import java.security.KeyPairGenerator;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -49,8 +48,11 @@ public class UserServiceImpl implements UserService{
     private final RoleRepository roleRepository;
     private final PasswordService passwordService;
 
+    @Value("${adminLogin.password}")
+    private String adminPassword;
+
     @Override
-    public UserResponse registerUser(UserRequest userRequest) throws MFBException, MessagingException {
+    public UserResponse registerUser(UserRequest userRequest) throws Exception {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         Users user = repositoryUser.findByUsername(username)
                 .orElseThrow(() -> new MFBException("Invalid user"));
@@ -61,22 +63,27 @@ public class UserServiceImpl implements UserService{
             if (repositoryUser.existsByUsername(userRequest.getUsername().toLowerCase()))
                 throw new MFBException("Username: "+ userRequest.getUsername() +" already exist");
 
-            String secretKey = secretKey();
+           try {
+               String secretKey = secretKey();
 
-            Users users = storeUser(userRequest, secretKey);
-            Users savedUser = repositoryUser.save(users);
-            emailService.sendRegistrationNotification(users);
+               Users users = storeUser(userRequest, secretKey);
+               Users savedUser = repositoryUser.save(users);
 
-            UserResponse response = new UserResponse();
-            response.setUsername(savedUser.getUsername());
-            response.setId(savedUser.getId());
-            response.setMessage("User created successfully. " +
-                    "Kindly activate your account with the credentials forwarded to your mail.");
-            response.setSecretKey(savedUser.getSecretKey());
+               emailService.sendRegistrationNotification(users);
 
-            return response;
+               UserResponse response = new UserResponse();
+               response.setUsername(savedUser.getUsername());
+               response.setId(savedUser.getId());
+               response.setEmail(savedUser.getEmail());
+               response.setMessage("User created successfully. " +
+                       "Kindly activate your account with the credentials forwarded to your email.");
+               response.setSecretKey(savedUser.getSecretKey());
+
+               return response;
+           }catch (Exception ex) {
+                throw new Exception(ex);
+           }
         }
-
     }
 
     @Override
@@ -110,6 +117,7 @@ public class UserServiceImpl implements UserService{
 
                 ActivateUserResponse response = new ActivateUserResponse();
                 response.setUsername(user.getUsername());
+                response.setEmail(user.getEmail());
                 response.setMessage("User activated successfully");
                 response.setSecretKey(user.getSecretKey());
                 response.setEnabled(user.isEnabled());
@@ -140,11 +148,14 @@ public class UserServiceImpl implements UserService{
             );
             String token = jwtService.generateToken(user);
 
+            this.deleteExpiredToken(user);
+
             this.revokeAllUserToken(user);
             this.savedUserToken(user, token);
 
             response.setSecretKey(user.getSecretKey());
             response.setUsername(user.getUsername());
+            response.setEmail(user.getEmail());
             response.setMessage("Login Successful");
             response.setId(user.getId());
             response.setAccessToken(token);
@@ -192,6 +203,11 @@ public class UserServiceImpl implements UserService{
         tokenRepository.saveAll(validUserTokens);
     }
 
+    private void deleteExpiredToken(Users users) {
+        List<Token> expiredTokens = tokenRepository.findAllExpiredTokensByUser(users.getId());
+        tokenRepository.deleteAll(expiredTokens);
+    }
+
     private void savedUserToken(Users user, String token) {
         Token savedToken = Token.builder()
                         .users(user)
@@ -211,17 +227,19 @@ public class UserServiceImpl implements UserService{
                 .createdAt(LocalDateTime.now())
                 .status(StatusConstant.INACTIVE)
                 .role(RoleType.GENERAL_USER)
+                .email(userRequest.getEmail())
                 .build();
     }
 
     private Users storeAdminUser(UserRequest userRequest) {
         return Users.builder()
                 .username(userRequest.getUsername())
+                .email(userRequest.getEmail())
                 .createdAt(LocalDateTime.now())
                 .status(StatusConstant.ACTIVE)
                 .enabled(true)
                 .role(RoleType.ADMIN)
-                .password(passwordEncoder.encode("admin@254"))
+                .password(passwordEncoder.encode(adminPassword))
                 .build();
     }
 

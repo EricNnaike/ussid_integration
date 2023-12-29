@@ -23,7 +23,7 @@ public class UserController {
     @PostMapping("/user")
     @ResponseStatus(HttpStatus.CREATED)
     public UserResponse registerUser(@RequestBody UserRequest userRequest)
-            throws MFBException, MessagingException {
+            throws Exception {
         return userService.registerUser(userRequest);
     }
 

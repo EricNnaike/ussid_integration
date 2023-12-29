@@ -1,7 +1,6 @@
 package com.example.mfb_ussd_process_flow.entityUser;
 
 import com.example.mfb_ussd_process_flow.enums.PaymentStatus;
-import com.example.mfb_ussd_process_flow.enums.RoleType;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;

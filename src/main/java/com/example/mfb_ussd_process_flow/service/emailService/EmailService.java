@@ -1,6 +1,5 @@
 package com.example.mfb_ussd_process_flow.service.emailService;
 
-import com.example.mfb_ussd_process_flow.dto.request.UserRequest;
 import com.example.mfb_ussd_process_flow.entityUser.Users;
 import jakarta.mail.MessagingException;
 

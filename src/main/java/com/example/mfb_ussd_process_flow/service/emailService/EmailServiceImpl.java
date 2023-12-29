@@ -1,11 +1,10 @@
 package com.example.mfb_ussd_process_flow.service.emailService;
 
-import com.example.mfb_ussd_process_flow.dto.request.UserRequest;
 import com.example.mfb_ussd_process_flow.entityUser.Users;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -22,6 +21,12 @@ public class EmailServiceImpl implements EmailService{
 
     private final JavaMailSender mailSender;
     private final TemplateEngine templateEngine;
+
+    @Value("${email.username}")
+    private String username;
+
+    @Value("${email.subject}")
+    private String subject;
 
 
     @Override
@@ -65,13 +70,13 @@ public class EmailServiceImpl implements EmailService{
         try {
             MimeMessageHelper helper = new MimeMessageHelper(message, MimeMessageHelper.MULTIPART_MODE_MIXED_RELATED, StandardCharsets.UTF_8.name());
 
-            helper.setFrom("apployster@gmail.com");
+            helper.setFrom("TrustBanc App <"+username+">");
             helper.setText(html, true);
-            helper.setTo(users.getUsername());
-            helper.setSubject("Notification From Trust Banc MFB");
+            helper.setTo(users.getEmail());
+            helper.setSubject(subject);
 
             mailSender.send(message);
-            response.setMessage("mail send to: " + users.getUsername());
+            response.setMessage("mail sent to: " + users.getEmail());
             response.setStatus(Boolean.TRUE);
 
         }catch(MessagingException | TemplateEngineException e){

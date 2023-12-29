@@ -1,14 +1,8 @@
 package com.example.mfb_ussd_process_flow.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 import lombok.ToString;
-
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 @Data
 @ToString

@@ -13,7 +13,7 @@ import jakarta.mail.MessagingException;
 import java.util.List;
 
 public interface UserService {
-    UserResponse registerUser(UserRequest userRequest) throws MFBException, MessagingException;
+    UserResponse registerUser(UserRequest userRequest) throws Exception;
     void registerAdmin(UserRequest userRequest) throws MFBException;
     ActivateUserResponse activateUser(ActivateUserRequest activateUserRequest) throws MFBException, MessagingException;
     LoginResponse loginUser(LoginRequest loginRequest) throws MFBException;

@@ -42,4 +42,26 @@ public class AppUtils {
 
     }
 
+    public static String checkSumSha512(String clientKey, String debitAcctNumber, String creditAcctNumber,
+                                        String transactionReference, String amount, String secretKey) {
+
+        String dataToHash = clientKey + debitAcctNumber + creditAcctNumber + transactionReference + amount + secretKey;
+        System.out.println("dataToHash "+dataToHash);
+
+        String result = null;
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-512");
+            //  md.update(salt.getBytes(StandardCharsets.UTF_8));
+            byte[] bytes = md.digest(dataToHash.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for(int i=0; i< bytes.length ;i++){
+                sb.append(Integer.toString((bytes[i] & 0xff) + 0x100, 16).substring(1));
+            }
+            result = sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+        return result;
+    }
+
 }

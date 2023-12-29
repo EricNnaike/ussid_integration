@@ -4,10 +4,14 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class CheckBalanceRequest {
+public class TransferRequestDto {
     private String accountNumber;
-
+    private String creditAcct;
+    private BigDecimal payamount;
+    private String narration;
 }

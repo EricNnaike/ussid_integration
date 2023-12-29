@@ -4,17 +4,14 @@ import com.example.mfb_ussd_process_flow.config.BalanceConfiguration;
 import com.example.mfb_ussd_process_flow.dto.request.*;
 import com.example.mfb_ussd_process_flow.dto.response.*;
 import com.example.mfb_ussd_process_flow.entityAccount.TBLAccount;
-import com.example.mfb_ussd_process_flow.entityUser.TransactionHistory;
 import com.example.mfb_ussd_process_flow.entityUser.Users;
-import com.example.mfb_ussd_process_flow.enums.PaymentStatus;
 import com.example.mfb_ussd_process_flow.exceptions.MFBException;
 import com.example.mfb_ussd_process_flow.repositoryAccount.CustomerRepository;
 import com.example.mfb_ussd_process_flow.repositoryAccount.TBLAccountRepository;
 import com.example.mfb_ussd_process_flow.repositoryUser.TransactionHistoryRepository;
 import com.example.mfb_ussd_process_flow.repositoryUser.UserRepository;
 import com.example.mfb_ussd_process_flow.utils.AppUtils;
-import com.example.mfb_ussd_process_flow.utils.Constants;
-import jakarta.annotation.PostConstruct;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,15 +23,17 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.Collections;
-import java.util.Date;
-import java.util.concurrent.*;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Data
 public class AccountServiceImpl implements AccountService {
 
     private final UserRepository userRepository;
@@ -44,7 +43,8 @@ public class AccountServiceImpl implements AccountService {
     private final TBLAccountRepository tblAccountRepository;
     private final TransactionHistoryRepository transactionHistoryRepository;
     private final BalanceConfiguration balanceConfiguration;
-    private ExecutorService executor;
+
+
     @Value("${api.clientKey}")
     private String clientKey;
 
@@ -65,6 +65,53 @@ public class AccountServiceImpl implements AccountService {
 
     @Value("${payload.AcctOfficer}")
     private String AcctOfficer;
+
+    @Value("${interBankTransfer.secretKey}")
+    private String interTransferSecretKey;
+
+    @Value("${interBankTransfer.clientKey}")
+    private String interTransferClientKey;
+
+    @Value("${serviceCharge.payAmount}")
+    private BigDecimal serviceChargePayAmount;
+
+    @Value("${serviceCharge.creditAccount}")
+    private String serviceChargeCreditAccount;
+
+    @Value("${serviceCharge.balanceNaration}")
+    private String balanceNaration;
+
+    @Value("${serviceCharge.statementNaration}")
+    private String statementNaration;
+
+    @Value("${api.bvnVerificationURL}")
+    private String bvnVerificationURL;
+
+    @Value("${api.openAccountURL}")
+    private String openAccountURL;
+
+    @Value("${api.accountBalanceURL}")
+    private String accountBalanceURLs;
+
+    @Value("${api.servicePaymentUrl}")
+    private String servicePaymentsUrl;
+
+    @Value("${api.intraBankTransferUrl}")
+    private String intraBankTransferUrls;
+
+    @Value("${api.intraBankNameEnquiryUrl}")
+    private String intraBankNameEnquiryUrl;
+
+    @Value("${api.interBankNameEnquiryUrl}")
+    private String interBankNameEnquiryUrl;
+
+    @Value("${api.interBankTransferUrl}")
+    private String interBankTransferUrls;
+
+    @Value("${api.accountStatementUrl}")
+    private String accountStatementUrls;
+
+
 
 
     @Override
@@ -105,7 +152,7 @@ public class AccountServiceImpl implements AccountService {
     }
 
     private ResponseEntity<OpenAccountResponse> handleOpenAccount(OpenAccountRequest openAccountRequest) {
-        String openAccountUrl = Constants.openAccountURL;
+        String openAccountUrl = openAccountURL ;
         HttpHeaders header = new HttpHeaders();
         header.setContentType(MediaType.APPLICATION_JSON);
         header.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
@@ -120,7 +167,7 @@ public class AccountServiceImpl implements AccountService {
     }
 
     private ResponseEntity<BVNVerificationResponse> performBVNVerification(String bvn) {
-        String BVNVerificationUrl = Constants.bvnVerificationURL + "/" + bvn;
+        String BVNVerificationUrl = bvnVerificationURL + "/" + bvn;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<String> requestEntity = new HttpEntity<>(headers);
@@ -161,29 +208,19 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     @Transactional
-    public AccountBalanceResponse checkBalance(CheckBalanceRequest checkBalanceRequest) throws Throwable {
+        public BalanceResponse checkBalance(CheckBalanceRequest checkBalanceRequest) throws Throwable {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         Users user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new MFBException("Invalid user"));
 
         final AccountBalanceResponse[] accountBalanceResponse = {null};
 
-        TBLAccount account = tblAccountRepository.findTBLAccountByPhone(checkBalanceRequest.getPhoneNumber())
-                .orElseThrow(() -> new MFBException("Account not found"));
-        String accountNumber = account.getAccountnumber();
-        log.info("Account number: {}", account.getAccountnumber());
+        log.info("Account number: {}", checkBalanceRequest.getAccountNumber());
+        ServicePaymentRequest servicePaymentRequest = getBalanceServiceChargeRequest(checkBalanceRequest.getAccountNumber());
 
-        if (balanceConfiguration.isCheckBalanceEnabled()) {
-            if (account.getBKBalance().compareTo(Constants.serviceFee) <= 0) {
-                throw new MFBException("Insufficient account balance");
-            }
-        }
-        ServicePaymentRequest servicePaymentRequest = getBalanceServiceChargeRequest(account, checkBalanceRequest);
-
-        // CompletableFuture for getAccountBalance
         CompletableFuture<AccountBalanceResponse> getAccountBalanceFuture = CompletableFuture.supplyAsync(() -> {
             try {
-                ResponseEntity<AccountBalanceResponse> response = getAccountBalance(accountNumber);
+                ResponseEntity<AccountBalanceResponse> response = getAccountBalance(checkBalanceRequest.getAccountNumber());
                 if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                     accountBalanceResponse[0] = response.getBody();
                     log.info("Account balance info: {}", accountBalanceResponse[0]);
@@ -194,7 +231,6 @@ public class AccountServiceImpl implements AccountService {
             return accountBalanceResponse[0];
         });
 
-        // CompletableFuture for handleServiceFee
         CompletableFuture<Void> handleServiceFeeFuture = CompletableFuture.runAsync(() -> {
             try {
                 handleServiceFee(servicePaymentRequest);
@@ -203,25 +239,38 @@ public class AccountServiceImpl implements AccountService {
             }
         });
 
-        // Combine CompletableFuture instances
         CompletableFuture<Void> combinedFuture = getAccountBalanceFuture.thenComposeAsync(accountResponse ->
                 handleServiceFeeFuture);
 
-        // Join the CompletableFuture to get the result or handle any exceptions
         try {
             combinedFuture.join();
         } catch (CompletionException ex) {
-            throw ex.getCause(); // Propagate the original exception
+            throw ex.getCause();
         }
 
-        return accountBalanceResponse[0];
+        BalanceResponse balanceResponse = getAccountBalanceResponse(accountBalanceResponse, checkBalanceRequest.getAccountNumber());
+        return balanceResponse;
     }
 
+    private BalanceResponse getAccountBalanceResponse(AccountBalanceResponse[] accountBalanceResponse, String selectedAccountNumber) {
+        BalanceResponse.Response res = new BalanceResponse.Response();
+        res.setAvailableBalance(accountBalanceResponse[0].getResponse().getAvailableBalance());
+        res.setRetval(accountBalanceResponse[0].getResponse().getRetval());
+        res.setUsableBalance(accountBalanceResponse[0].getResponse().getUsableBalance());
+        res.setRetmsg(accountBalanceResponse[0].getResponse().getRetmsg());
+        res.setAcctName(accountBalanceResponse[0].getResponse().getAcctName());
+        res.setAccountNumber(selectedAccountNumber);
+
+        return BalanceResponse.builder()
+                .Status(accountBalanceResponse[0].getStatus())
+                .Response(res)
+                .build();
+    }
 
 
     private void handleServiceFee(ServicePaymentRequest servicePaymentRequest) throws Exception {
        try {
-           String servicePaymentUrl = Constants.servicePaymentUrl;
+           String servicePaymentUrl = servicePaymentsUrl;
            HttpHeaders headers = new HttpHeaders();
            headers.setContentType(MediaType.APPLICATION_JSON);
            HttpEntity<ServicePaymentRequest> request = new HttpEntity<>(servicePaymentRequest, headers);
@@ -241,7 +290,7 @@ public class AccountServiceImpl implements AccountService {
     }
 
     private ResponseEntity<AccountBalanceResponse> getAccountBalance(String accountNumber) {
-        String accountBalanceURL = Constants.accountBalanceURL+accountNumber;
+        String accountBalanceURL = accountBalanceURLs+accountNumber;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<String> request = new HttpEntity<>(null, headers);
@@ -254,16 +303,16 @@ public class AccountServiceImpl implements AccountService {
         return response;
     }
 
-    private ServicePaymentRequest getBalanceServiceChargeRequest(TBLAccount account, CheckBalanceRequest checkBalanceRequest) {
+    private ServicePaymentRequest getBalanceServiceChargeRequest(String accountNumber) {
         String requestID = AppUtils.generateRequestID(21);
-        String transactionHash = AppUtils.Sha512(account.getAccountnumber(), checkBalanceRequest.getCreditAcct(),
-                checkBalanceRequest.getPayamount(), requestID, secretKey);
+        String transactionHash = AppUtils.Sha512(accountNumber, serviceChargeCreditAccount,
+                serviceChargePayAmount, requestID, secretKey);
         return ServicePaymentRequest.builder()
-                .debitAcct(account.getAccountnumber())
+                .debitAcct(accountNumber)
                 .transactionHash(transactionHash)
-                .payamount(checkBalanceRequest.getPayamount())
-                .narration(checkBalanceRequest.getNarration())
-                .creditAcct(checkBalanceRequest.getCreditAcct())
+                .payamount(serviceChargePayAmount)
+                .narration(balanceNaration)
+                .creditAcct(serviceChargeCreditAccount)
                 .requestID(requestID)
                 .build();
     }
@@ -304,7 +353,7 @@ public class AccountServiceImpl implements AccountService {
 
         BigDecimal balance = account.getBKBalance();
         if (balanceConfiguration.isCheckBalanceEnabled()) {
-            if (account.getBKBalance().compareTo(Constants.serviceFee) <= 0) {
+            if (account.getBKBalance().compareTo(serviceChargePayAmount) <= 0) {
                 throw new MFBException("Insufficient account balance");
             }
         }
@@ -321,8 +370,53 @@ public class AccountServiceImpl implements AccountService {
         return intraBankTransferResponse;
     }
 
+    @Override
+    @Transactional
+    public IntraBankTransferResponse intraBankTransferMethod(TransferRequestDto transferRequestDto) throws Exception {
+        log.info("transfer request {}",transferRequestDto);
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        userRepository.findByUsername(username)
+                .orElseThrow(() -> new MFBException("User not found"));
+
+        IntraBankNameEnquiryResponse intraBankNameEnquiryResponse1 = null;
+        IntraBankTransferResponse intraBankTransferResponse = null;
+        BaseResponse<String> baseResponse = null;
+
+        log.info("debit account number: {}", transferRequestDto.getAccountNumber());
+
+        log.info("credit acc {}",transferRequestDto.getCreditAcct());
+        //Name enquiry API call
+        try {
+            ResponseEntity<IntraBankNameEnquiryResponse> nameEnquiryResponse = getIntraBankNameEnquiry(transferRequestDto.getCreditAcct());
+            if (nameEnquiryResponse.getStatusCode().is2xxSuccessful() && nameEnquiryResponse.getBody() != null) {
+                intraBankNameEnquiryResponse1 = nameEnquiryResponse.getBody();
+                log.info("NameEnquiryResponse info: {}", intraBankNameEnquiryResponse1);
+
+                if (!intraBankNameEnquiryResponse1.getResponse().getAccountNo().equals(transferRequestDto.getCreditAcct())) {
+                    throw new MFBException("Credit account details not found");
+                }
+            }
+        } catch (Exception ex) {
+            throw new Exception("Failed name enquiry operation", ex);
+        }
+
+        IntraBankTransferRequest intraBankTransferRequest = getIntraBankTransferRequestDto(transferRequestDto, transferRequestDto.getAccountNumber());
+
+        //IntraBank transfer API Call
+        try {
+            ResponseEntity<IntraBankTransferResponse> response = handleIntraBankTransfer(intraBankTransferRequest);
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                intraBankTransferResponse = response.getBody();
+                log.info("intra bank transfer dto {}",intraBankTransferResponse);
+            }
+        } catch (Exception ex) {
+            throw new Exception("Failed intra transfer operation", ex);
+        }
+        return intraBankTransferResponse;
+    }
+
     private ResponseEntity<IntraBankTransferResponse> handleIntraBankTransfer(IntraBankTransferRequest intraBankTransferRequest) {
-        String intraBankTransferUrl = Constants.intraBankTransferUrl;
+        String intraBankTransferUrl = intraBankTransferUrls;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<IntraBankTransferRequest> request = new HttpEntity<>(intraBankTransferRequest, headers);
@@ -336,7 +430,7 @@ public class AccountServiceImpl implements AccountService {
     }
 
     private ResponseEntity<IntraBankNameEnquiryResponse> getIntraBankNameEnquiry(String accountNumber) {
-        String nameEnquiryUrl = Constants.intraBankNameEnquiryUrl+accountNumber;
+        String nameEnquiryUrl = intraBankNameEnquiryUrl+accountNumber;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<String> request = new HttpEntity<>(null, headers);
@@ -349,12 +443,25 @@ public class AccountServiceImpl implements AccountService {
         return response;
     }
 
-    private IntraBankTransferRequest getIntraBankTransferRequest(TransferRequest transferRequest, TBLAccount account) {
+    private IntraBankTransferRequest getIntraBankTransferRequest(TransferRequest transferRequest, TBLAccount account ) {
         String requestID = AppUtils.generateRequestID(21);
         String transactionHash = AppUtils.Sha512(account.getAccountnumber(), transferRequest.getCreditAcct(),
                 transferRequest.getPayamount(), requestID, secretKey);
         return IntraBankTransferRequest.builder()
                 .debitAcct(account.getAccountnumber())
+                .narration(transferRequest.getNarration())
+                .payamount(transferRequest.getPayamount())
+                .creditAcct(transferRequest.getCreditAcct())
+                .requestID(requestID)
+                .transactionHash(transactionHash)
+                .build();
+    }
+    private IntraBankTransferRequest getIntraBankTransferRequestDto(TransferRequestDto transferRequest, String accountNumber ) {
+        String requestID = AppUtils.generateRequestID(21);
+        String transactionHash = AppUtils.Sha512(accountNumber, transferRequest.getCreditAcct(),
+                transferRequest.getPayamount(), requestID, secretKey);
+        return IntraBankTransferRequest.builder()
+                .debitAcct(accountNumber)
                 .narration(transferRequest.getNarration())
                 .payamount(transferRequest.getPayamount())
                 .creditAcct(transferRequest.getCreditAcct())
@@ -384,7 +491,7 @@ public class AccountServiceImpl implements AccountService {
 
         NameEnquiryRequest nameEnquiryRequest = NameEnquiryRequest.builder()
                 .accountNumber(interBankTrasferRequest.getBeneficiaryAccount())
-                .bankCode(interBankTrasferRequest.getBankCode())
+                .bankCode(interBankTrasferRequest.getBeneficiaryBank())
                 .build();
         //Inter bank Name enquiry API call
         try {
@@ -406,7 +513,7 @@ public class AccountServiceImpl implements AccountService {
 
         BigDecimal balance = account.getBKBalance();
         if (balanceConfiguration.isCheckBalanceEnabled()) {
-            if (account.getBKBalance().compareTo(Constants.serviceFee) <= 0) {
+            if (account.getBKBalance().compareTo(serviceChargePayAmount) <= 0) {
                 throw new MFBException("Insufficient account balance");
             }
         }
@@ -424,7 +531,7 @@ public class AccountServiceImpl implements AccountService {
     }
 
     private ResponseEntity<InterBankNameEnquiryResponse> getInterBankNameEnquiry(NameEnquiryRequest nameEnquiryRequest) {
-        String nameEnquiryUrl = Constants.interBankNameEnquiryUrl;
+        String nameEnquiryUrl = interBankNameEnquiryUrl;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<NameEnquiryRequest> request = new HttpEntity<>(nameEnquiryRequest, headers);
@@ -439,7 +546,7 @@ public class AccountServiceImpl implements AccountService {
 
     private ResponseEntity<InterBankTransferResponse> handleInterBankTranfer(InterTransferRequest interTransferRequest) throws Exception {
        try {
-           String interBankTransferUrl = Constants.interBankTransferUrl;
+           String interBankTransferUrl = interBankTransferUrls;
            HttpHeaders headers = new HttpHeaders();
            headers.setContentType(MediaType.APPLICATION_JSON);
            HttpEntity<InterTransferRequest> request = new HttpEntity<>(interTransferRequest, headers);
@@ -457,6 +564,12 @@ public class AccountServiceImpl implements AccountService {
 
     private InterTransferRequest getInterTransferRequest(InterBankTrasferRequest interBankTrasferRequest, TBLAccount account) {
         String transRef = AppUtils.generateRequestID(21);
+        BigDecimal roundedAmount = interBankTrasferRequest.getAmount().setScale(2, RoundingMode.HALF_UP);
+        String checkSum = AppUtils.checkSumSha512(interTransferClientKey, account.getAccountnumber(),
+                interBankTrasferRequest.getBeneficiaryAccount(), transRef,
+                String.valueOf(roundedAmount), interTransferSecretKey);
+        String encodedCheckSum = Base64.getEncoder().encodeToString(checkSum.getBytes());
+
         return InterTransferRequest.builder()
                 .narration(interBankTrasferRequest.getNarration())
                 .amount(interBankTrasferRequest.getAmount())
@@ -464,7 +577,7 @@ public class AccountServiceImpl implements AccountService {
                 .sourceAccount(account.getAccountnumber())
                 .beneficiaryAccount(interBankTrasferRequest.getBeneficiaryAccount())
                 .beneficiaryBank(interBankTrasferRequest.getBeneficiaryBank())
-                .checkSum(interBankTrasferRequest.getCheckSum())
+                .checkSum(encodedCheckSum)
                 .transRef(transRef)
                 .build();
     }
@@ -477,20 +590,11 @@ public class AccountServiceImpl implements AccountService {
 
         final StatementResponse[] statementResponse = {null};
 
-        TBLAccount account = tblAccountRepository.findTBLAccountByPhone(accountRequest.getPhoneNumber())
-                .orElseThrow(() -> new MFBException("Invalid account"));
-        log.info("debit account number: {}", account.getAccountnumber());
-
-        if (balanceConfiguration.isCheckBalanceEnabled()) {
-            if (account.getBKBalance().compareTo(Constants.serviceFee) <= 0) {
-                throw new MFBException("Insufficient account balance");
-            }
-        }
         // CompletableFuture for account statement
         CompletableFuture<StatementResponse> getStatementFuture = CompletableFuture.supplyAsync(() -> {
             try {
                 log.info("incoming request {}",accountRequest);
-                ResponseEntity<StatementResponse> response = handleStatementReport(account.getAccountnumber(),
+                ResponseEntity<StatementResponse> response = handleStatementReport(accountRequest.getAccountNumber(),
                         accountRequest.getStartDate(), accountRequest.getEndDate());
 
                 log.info("response body {}",response.getBody());
@@ -505,7 +609,7 @@ public class AccountServiceImpl implements AccountService {
             return statementResponse[0];
         });
 
-        ServicePaymentRequest servicePaymentRequest = getStatementServiceChargeRequest(account, accountRequest);
+        ServicePaymentRequest servicePaymentRequest = getStatementServiceChargeRequest(accountRequest.getAccountNumber(), accountRequest);
 
         // CompletableFuture for handleServiceFee
         CompletableFuture<Void> handleServiceFeeFuture = CompletableFuture.runAsync(() -> {
@@ -542,22 +646,22 @@ public class AccountServiceImpl implements AccountService {
         }
     }
 
-    private ServicePaymentRequest getStatementServiceChargeRequest(TBLAccount account, AccountRequest accountRequest) {
+    private ServicePaymentRequest getStatementServiceChargeRequest(String accountNumber, AccountRequest accountRequest) {
         String requestID = AppUtils.generateRequestID(21);
-        String transactionHash = AppUtils.Sha512(account.getAccountnumber(), accountRequest.getCreditAcct(),
-                accountRequest.getPayamount(), requestID, secretKey);
+        String transactionHash = AppUtils.Sha512(accountNumber, serviceChargeCreditAccount,
+                serviceChargePayAmount, requestID, secretKey);
         return ServicePaymentRequest.builder()
-                .debitAcct(account.getAccountnumber())
+                .debitAcct(accountNumber)
                 .transactionHash(transactionHash)
-                .payamount(accountRequest.getPayamount())
-                .narration(accountRequest.getNarration())
-                .creditAcct(accountRequest.getCreditAcct())
+                .payamount(serviceChargePayAmount)
+                .narration(statementNaration)
+                .creditAcct(serviceChargeCreditAccount)
                 .requestID(requestID)
                 .build();
     }
 
     private ResponseEntity<StatementResponse> handleStatementReport(String AccountNo, String StartDate, String EndDate) {
-        String accountStatementUrl = Constants.accountStatementUrl+"AccountNo=" + AccountNo + "&StartDate=" +
+        String accountStatementUrl = accountStatementUrls+"AccountNo=" + AccountNo + "&StartDate=" +
                 StartDate + "&EndDate=" + EndDate;
         log.info("account url {}", accountStatementUrl);
         HttpHeaders headers = new HttpHeaders();
@@ -571,6 +675,31 @@ public class AccountServiceImpl implements AccountService {
         );
         log.info(String.valueOf(response.getBody()));
         return response;
+    }
+
+    @Override
+    public List<AccountNumberResponse> findAccountNumber(RetrieveAccountRequest request) throws MFBException {
+        log.info("phone number {}", request.getPhoneNumber());
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        userRepository.findByUsername(username)
+                .orElseThrow(() -> new MFBException("User not found"));
+
+        List<String> accountNumberList = tblAccountRepository.findAllByPhone(request.getPhoneNumber());
+
+        if (accountNumberList.isEmpty()) {
+            throw new MFBException("No account numbers found for the given phone number.");
+        }
+        log.info("size {}", accountNumberList.size());
+
+        List<AccountNumberResponse> accountNumberResponseList = new ArrayList<>();
+
+        for (String accountNumber : accountNumberList) {
+            AccountNumberResponse accountNumberResponse = new AccountNumberResponse();
+            accountNumberResponse.setAccountNumber(accountNumber);
+            accountNumberResponseList.add(accountNumberResponse);
+        }
+
+        return accountNumberResponseList;
     }
 
 

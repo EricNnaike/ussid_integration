@@ -1,6 +1,5 @@
 package com.example.mfb_ussd_process_flow.config;
 
-import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.ClientHttpRequestFactory;
@@ -42,18 +41,18 @@ public class WebClientConfig {
         return new RestTemplate(requestFactory);
     }
 
-    private static final javax.net.ssl.TrustManager[] trustAllCerts = new javax.net.ssl.TrustManager[]{
-            new javax.net.ssl.X509TrustManager() {
-                public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+    private static final TrustManager[] trustAllCerts = new TrustManager[]{
+            new X509TrustManager() {
+                public X509Certificate[] getAcceptedIssuers() {
                     return null;
                 }
 
                 public void checkClientTrusted(
-                        java.security.cert.X509Certificate[] certs, String authType) {
+                        X509Certificate[] certs, String authType) {
                 }
 
                 public void checkServerTrusted(
-                        java.security.cert.X509Certificate[] certs, String authType) {
+                        X509Certificate[] certs, String authType) {
                 }
             }
     };
@@ -67,7 +66,7 @@ public class WebClientConfig {
         {
             // Create a trust manager that does not validate certificate chains
             TrustManager[] trustAllCerts = new TrustManager[] {new X509TrustManager() {
-                public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+                public X509Certificate[] getAcceptedIssuers() {
                     return null;
                 }
                 public void checkClientTrusted(X509Certificate[] certs, String authType) {

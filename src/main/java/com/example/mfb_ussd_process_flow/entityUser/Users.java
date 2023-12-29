@@ -29,9 +29,12 @@ public class Users implements UserDetails {
     @Column(name = "id", nullable = false)
     private Long id;
 
-    @Pattern(regexp = "^[A-Za-z0-9+_.-]+@(.+)$",message = "Invalid Email Address")
     @Column(unique = true, name = "username")
     private String username;
+
+    @Pattern(regexp = "^[A-Za-z0-9+_.-]+@(.+)$",message = "Invalid Email Address")
+    @Column(unique = true, name = "email")
+    private String email;
 
     @Column(name = "secretKey")
     private String secretKey;

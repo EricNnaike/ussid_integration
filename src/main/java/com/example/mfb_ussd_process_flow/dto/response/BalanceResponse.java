@@ -2,6 +2,7 @@ package com.example.mfb_ussd_process_flow.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -10,7 +11,8 @@ import java.math.BigDecimal;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class AccountBalanceResponse {
+@Builder
+public class BalanceResponse {
     @JsonProperty("Status")
     private String Status;
 
@@ -35,6 +37,8 @@ public class AccountBalanceResponse {
 
         @JsonProperty("AcctName")
         private String AcctName;
-    }
 
+        @JsonProperty("accountNumber")
+        private String accountNumber;
+    }
 }

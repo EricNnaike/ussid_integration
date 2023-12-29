@@ -17,6 +17,4 @@ public class InterBankTrasferRequest {
     private BigDecimal amount;
     private String beneficiaryBank;
     private String narration;
-    private String checkSum;
-    private String bankCode;
 }

@@ -7,14 +7,11 @@ import com.example.mfb_ussd_process_flow.repositoryUser.UserRepository;
 import com.example.mfb_ussd_process_flow.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.hibernate.query.sql.internal.ParameterRecognizerImpl;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
-
-import java.util.ArrayList;
-import java.util.List;
 
 @Slf4j
 @Component
@@ -24,6 +21,9 @@ public class MasterRecordsLoader {
     private final TransactionTemplate transactionTemplate;
     private final UserService userService;
     private final UserRepository repositoryUser;
+
+    @Value("${adminLogin.email}")
+    private String adminEmail;
 
     @EventListener(ContextRefreshedEvent.class)
     public void init() {
@@ -46,7 +46,9 @@ public class MasterRecordsLoader {
 
 
         UserRequest adminDto = new UserRequest();
-        adminDto.setUsername("uchenna.nnaike@trustbancgroup.com");
+        adminDto.setUsername(adminEmail);
+        adminDto.setEmail(adminEmail);
+
         createAdminUser(adminDto);
 
     }
